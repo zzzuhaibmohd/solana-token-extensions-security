@@ -7,15 +7,17 @@ description: Use when reviewing Solana or Anchor code that interacts with Token-
 
 Use this skill when auditing Solana programs that accept, create, custody, or transfer Token-2022 assets.
 
-Read [token-2022-patterns.md](/Users/zuhaib44/Documents/New project 2/solana-token-extensions-security/references/token-2022-patterns.md) when you need extension-specific exploit ideas, edge cases, or review prompts.
+Read [token-2022-patterns.md](references/token-2022-patterns.md) when you need extension-specific exploit ideas, edge cases, or review prompts.
 
-Read [finding-templates.md](/Users/zuhaib44/Documents/New project 2/solana-token-extensions-security/references/finding-templates.md) when writing findings, triaging severity, or converting review notes into clean report language.
+Read [finding-templates.md](references/finding-templates.md) when writing findings, triaging severity, or converting review notes into clean report language.
 
-Use the issue bank in [token-2022-patterns.md](/Users/zuhaib44/Documents/New project 2/solana-token-extensions-security/references/token-2022-patterns.md) to map real audit findings to recurring Token-2022 failure modes:
+Use the issue bank in [token-2022-patterns.md](references/token-2022-patterns.md) to map real audit findings to recurring Token-2022 failure modes:
 - fee accounting drift on transfer-fee mints
 - permanent-delegate vault custody breaks
 - transfer-hook integration gaps and missing extra accounts
 - mint-extension space is computed before all required mint extensions are added
+
+Use the confidence matrix in [finding-templates.md](references/finding-templates.md) to record how sure you are about each finding separately from severity.
 
 Assume the target may be vulnerable whenever it:
 - trusts mint/account state without verifying extensions
@@ -161,7 +163,7 @@ Also search for logic that:
 
 ## Extension Review Checklist
 
-Use the extension checklist in [token-2022-patterns.md](/Users/zuhaib44/Documents/New project 2/solana-token-extensions-security/references/token-2022-patterns.md) for detailed extension-by-extension review prompts.
+Use the extension checklist in [token-2022-patterns.md](references/token-2022-patterns.md) for detailed extension-by-extension review prompts.
 
 At minimum, inspect mint-side extensions:
 - non-transferable tokens
@@ -420,6 +422,20 @@ Use this structure for findings:
 
 Short, exploit-focused bug title.
 
+### Severity
+
+High / Medium / Low / Info.
+
+### Confidence
+
+High / Medium / Low.
+
+### Evidence
+
+- code path
+- docs or issue reference
+- local repro or test result
+
 ### Preconditions
 
 - which mint/account extensions are needed
@@ -449,6 +465,11 @@ State concrete effect:
 ### Fix
 
 State minimal fix and strongest fix.
+
+Use severity and confidence separately:
+- severity measures impact
+- confidence measures certainty
+- evidence explains why the confidence rating is justified
 
 ## Strong Default Heuristics
 

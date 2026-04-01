@@ -25,6 +25,29 @@ State:
 
 Describe the protocol assumption that fails.
 
+### Severity
+
+Choose one:
+- High: direct theft, drain, insolvency, or protocol-wide bypass
+- Medium: user-specific loss, stuck flow, or recoverable accounting mismatch
+- Low: compatibility issue or limited blast radius
+
+### Confidence
+
+Choose one:
+- High: code path is direct and confirmed by docs, tests, or a repro
+- Medium: code strongly suggests the issue, but one assumption still needs verification
+- Low: issue is plausible but not yet sufficiently proven
+
+### Evidence
+
+State the proof quality:
+- code-only
+- docs-supported
+- issue-supported
+- local repro
+- confirmed exploit path
+
 ### Exploit Path
 
 1. Attacker prepares the mint, token account, or extension state.
@@ -47,6 +70,25 @@ Use concrete language:
 State:
 - minimal fix
 - stronger systemic fix
+
+## Confidence Matrix
+
+Use this to classify certainty separately from severity:
+
+### High Confidence
+- direct code evidence
+- docs or issue write-up confirm the behavior
+- local repro or test demonstrates the path
+
+### Medium Confidence
+- strong code inference
+- at least one assumption still needs validation
+- likely exploitable, but not fully reproduced
+
+### Low Confidence
+- weak or indirect evidence
+- depends on an inferred edge case
+- more validation needed before filing as a finding
 
 ## Severity Heuristics
 

@@ -11,6 +11,12 @@ Read [token-2022-patterns.md](/Users/zuhaib44/Documents/New project 2/solana-tok
 
 Read [finding-templates.md](/Users/zuhaib44/Documents/New project 2/solana-token-extensions-security/references/finding-templates.md) when writing findings, triaging severity, or converting review notes into clean report language.
 
+Use the issue bank in [token-2022-patterns.md](/Users/zuhaib44/Documents/New project 2/solana-token-extensions-security/references/token-2022-patterns.md) to map real audit findings to recurring Token-2022 failure modes:
+- fee accounting drift on transfer-fee mints
+- permanent-delegate vault custody breaks
+- transfer-hook integration gaps and missing extra accounts
+- mint-extension space is computed before all required mint extensions are added
+
 Assume the target may be vulnerable whenever it:
 - trusts mint/account state without verifying extensions
 - assumes all SPL-like tokens behave like classic SPL Token
@@ -173,6 +179,12 @@ At minimum, inspect mint-side extensions:
 - group
 - group member pointer
 - group member
+
+Issue-derived review patterns:
+- Transfer-fee accounting drift: confirm the protocol books the net received amount, not the nominal transfer amount, and uses fee-aware helpers wherever rounding or withheld-fee state matters.
+- Permanent-delegate custody break: confirm the protocol trust-lists the mint and its delegate model before accepting deposits into shared vaults or reserves.
+- Transfer-hook integration gap: confirm hook-enabled mints are supported end to end, including `remaining_accounts` / extra-account metas, mint-aware transfer instructions, and CPI forwarding where required.
+- Mint-extension sizing failure: confirm the mint-space calculation happens only after every conditional extension has been added to the extension list.
 
 For metadata, group, and member-style mint identity:
 - anyone can create separate metadata, group, or group-member accounts and point them at a legitimate mint

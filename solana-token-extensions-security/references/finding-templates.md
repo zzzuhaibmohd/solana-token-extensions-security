@@ -103,3 +103,7 @@ Use these when drafting findings:
 - The protocol assumes transfer-fee helper calculations are exact inverses, which can create 1-unit rounding mismatches and stale-withheld accounting.
 - The protocol assumes transfer-fee configuration changes are immediate, which is false because fee updates take effect only after the epoch delay.
 - The protocol assumes withheld fees are real-time without harvest, which is false because `withheld_amount` is only synchronized when harvested to the mint.
+- The protocol records nominal transfer amounts for a fee-bearing mint instead of net received amounts, which slowly drains vault or reserve accounting.
+- The protocol accepts a mint with `PermanentDelegate` without trust-listing or monitoring the delegate model, so a third party can drain protocol custody.
+- The protocol accepts hook-enabled transfers without forwarding extra accounts or mint-aware transfer details, so the transfer hook can fail and DoS the flow.
+- The protocol computes mint account space before appending all required extensions, so metadata-enabled mint creation fails at runtime because the account is undersized.

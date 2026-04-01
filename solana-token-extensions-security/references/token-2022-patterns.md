@@ -55,6 +55,79 @@ Decide up front whether the contract supports Token-2022:
 - if yes, prefer `anchor_spl::token_interface`
 - if no, prefer classic SPL token types and avoid interface-based ambiguity
 
+## Real Issue Patterns
+
+These are the three audit patterns currently encoded from the issue bank:
+
+### Transfer-Fee Accounting Drift
+
+Look for:
+- vaults or reserves that record the nominal transfer amount rather than the net received amount
+- deposit, withdraw, stake, reward, or rebalance flows that assume fee-bearing transfers are 1:1
+- code that ignores fee rounding, `calculate_pre_fee_amount`, or withheld-fee harvesting
+
+Impact:
+- slow insolvency
+- user balance drift
+- reserve accounting mismatch
+
+Fix direction:
+- book net received amounts
+- use fee-aware transfer paths
+- reconcile balances before and after sensitive flows
+
+### Permanent-Delegate Vault Custody Break
+
+Look for:
+- shared vaults or custody pools that accept arbitrary mints without trust-listing the delegate model
+- reserve accounting that assumes no external authority can transfer or burn vault balances
+- missing policy or monitoring for mints with permanent delegate enabled
+
+Impact:
+- direct vault drain
+- reserve depletion
+- protocol insolvency
+
+Fix direction:
+- trust-list mints and authorities
+- explicitly model permanent-delegate power
+- reject or isolate untrusted mints
+
+### Transfer-Hook Integration Gap
+
+Look for:
+- hook-enabled mints passed through code paths that do not forward extra accounts
+- hook-enabled mints passed through code paths that do not forward `remaining_accounts` / extra-account metas
+- CPIs that omit mint-aware transfer details or rely on plain `transfer`
+- hook paths that do not verify supported mints, transferring state, and token-account ownership
+
+Impact:
+- transfer failure
+- missing policy enforcement
+- integration-level DoS
+
+Fix direction:
+- forward the required extra accounts
+- use mint-aware transfer instructions
+- validate hook-supported mint sets explicitly
+
+### Mint Extension Sizing Failure
+
+Look for:
+- mint size computed before conditional extensions are appended to the extension list
+- `create_account` / mint creation paths that size the account from an empty or incomplete extension vector
+- extension initialization CPIs executed after the mint was created with insufficient space
+
+Impact:
+- create-time failure
+- metadata-enabled or extension-enabled flows become unavailable
+- full DoS on mint creation or feature enablement paths
+
+Fix direction:
+- construct the full extension list first
+- calculate mint size only after all conditional extensions are present
+- size the mint for the final extension set before calling `create_account`
+
 ## Transfer Fees
 
 Look for:

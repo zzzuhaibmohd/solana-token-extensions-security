@@ -17,6 +17,7 @@ Assume the target may be vulnerable whenever it:
 - assumes transfers are synchronous, full-amount, transferable, unfrozen, or memo-free
 - trusts mint addresses without considering close-and-reinitialize history
 - treats token balances as invariant despite permanent delegates, mint authorities, or seizure-style controls
+- hardcodes token-account size, rent, or closeability assumptions from classic SPL Token
 
 ## Review Goal
 
@@ -45,8 +46,11 @@ Prioritize:
    - token account immediately usable after creation
    - token account owner immutable or meaningful
    - mint config stable forever
+   - mint extensions can be added or changed later without redesigning initialization
    - no third party can drain or burn vault funds
    - transfers only execute local logic
+   - `amount == 0` is sufficient for token-account closure
+   - SPL token account size / rent values still apply
 4. Try to falsify each assumption using Token-2022 extensions.
 5. Report the issue in exploit terms:
    - attacker setup
@@ -66,6 +70,10 @@ Ask these immediately during review:
 - Does it assume token accounts are normal ATAs with standard behavior?
 - Does it call into token transfers without handling hooks, memos, fees, freezes, or CPI restrictions?
 - Does it use a single vault for tokens whose mint authorities can seize, burn, or drain balances?
+- Does it hardcode token account rent, account size, or closure conditions?
+- Does it still call plain `transfer` instead of `transfer_checked` or `transfer_checked_with_fee`?
+- Does any keeper, relayer, or backend create token accounts for users using user-influenced extension space?
+- Does mint initialization assume extensions can be added later?
 
 If the answer to any is yes, inspect Token-2022 extension interactions before trusting the design.
 
@@ -90,6 +98,13 @@ Search for these first:
 - `withheld_amount`
 - `StateWithExtensions`
 - `BaseStateWithExtensions`
+- `closable()`
+- `calculate_fee`
+- `calculate_inverse_fee`
+- `getMinimumBalanceForRentExemptAccountWithExtensions`
+- `MintRequiredForTransfer`
+- `anchor_spl::token::transfer`
+- `165`
 
 Also search for logic that:
 - compares expected and actual token balances
@@ -97,6 +112,10 @@ Also search for logic that:
 - creates vaults or escrows and uses them immediately
 - allowlists mints without provenance checks
 - derives PDAs without including `mint.key()`
+- hardcodes `165` bytes or static token-account rent
+- closes accounts using only `amount == 0`
+- creates token accounts for users from keeper or relayer infrastructure
+- initializes the mint before initializing the intended extensions
 
 ## Extension Review Checklist
 
@@ -110,6 +129,9 @@ At minimum, inspect:
 - memo transfer
 - CPI guard
 - transfer hook
+- token account closure logic
+- rent and account-size calculation
+- `transfer` vs `transfer_checked`
 - metadata pointer / group pointer
 - immutable owner
 - non-transferable
@@ -126,6 +148,7 @@ Breaks under:
 - transfer fees
 - hooks that fail or alter flow
 - memo-required destinations when transfer silently never lands
+- `calculate_fee` and `calculate_inverse_fee` being mixed interchangeably
 
 ### Theme: Immediate-Usability Assumption
 
@@ -163,6 +186,19 @@ Breaks under:
 - transfer hook
 - memo transfer
 - CPI guard
+- calling deprecated `transfer` on Token-2022 flows that require mint-aware transfer paths
+
+### Theme: SPL-Compat Assumption
+
+Red flag:
+- protocol hardcodes classic SPL token-account space, rent, or closure rules
+
+Breaks under:
+- extension-sized token accounts
+- transfer-fee withheld balances
+- confidential-transfer pending and available balances
+- CPI-guard close restrictions
+- mint extensions needing upfront allocation and initialization order
 
 ## Reporting Template
 
@@ -211,6 +247,7 @@ Default to suspicion when:
 - current mint data is treated as history
 - token accounts are assumed to be standard ATAs
 - token logic does not branch on Token-2022 features
+- account creation or closing logic reuses classic SPL constants and assumptions
 
 Default to lower severity when:
 - the extension is cosmetic only and not used for auth or accounting

@@ -79,7 +79,13 @@ Lower severity:
 Use these when drafting findings:
 
 - The protocol assumes the recipient receives the nominal transfer amount, which is false for fee-enabled Token-2022 mints.
+- The protocol mixes Token-2022 fee helper semantics and assumes `calculate_fee` and `calculate_inverse_fee` are interchangeable, which can introduce persistent rounding loss.
 - The protocol treats current mint configuration as proof of historical safety, which is invalid in the presence of mint close and reinitialization.
 - The vault design assumes no external actor can mutate token balances, which is false when the mint exposes a permanent delegate or equivalent privileged authority.
 - The flow assumes newly created token accounts are immediately usable, which is false for mints with default frozen account state.
 - The transfer path assumes token movement is side-effect free, which is false for hook-enabled or memo-constrained Token-2022 assets.
+- The protocol assumes classic SPL token-account size, rent, or closeability rules still apply, which is false for extension-bearing Token-2022 accounts.
+- The protocol uses plain `transfer` in a Token-2022 path that requires mint-aware transfer instructions, causing extension-specific transfer failure.
+- The protocol assumes Token-2022 closeability is equivalent to `amount == 0`, which is false once transfer-fee, confidential-transfer, or CPI-guard extensions are active.
+- The protocol assumes token-account rent and size are static, which is false for extension-bearing Token-2022 accounts and can create correctness or keeper-loss bugs.
+- The mint initialization flow assumes extensions can be added later, which is false for Token-2022 mint extensions and often leads to unsafe redesign patterns.

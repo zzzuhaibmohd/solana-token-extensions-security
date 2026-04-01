@@ -7,6 +7,7 @@ Use this file when you want extension-specific exploit ideas, broken assumptions
 Look for:
 - escrow or vault logic crediting the nominal amount instead of net received amount
 - missing use of fee-aware transfer instructions
+- code mixing `calculate_fee` and `calculate_inverse_fee` as if they are true inverses
 - close-account flows that ignore `withheld_amount`
 - logic that assumes source and destination deltas match
 
@@ -14,10 +15,12 @@ Impact:
 - accounting mismatch
 - undercollateralization
 - stuck close flows
+- silent long-tail rounding loss from 1-unit mismatches across volume
 - fee bypass in edge cases involving stale accounts or reinitialized mints
 
 Fix direction:
 - use fee-aware instructions where possible
+- prefer `transfer_checked_with_fee` with the exact expected fee
 - compare balances before and after transfer
 - harvest withheld fees before close
 
@@ -115,11 +118,81 @@ Fix direction:
 - verify token account mint matches the mint account
 - include mint in PDA seeds
 
+## Token Account Closure
+
+Look for:
+- close logic that only checks `amount == 0`
+- hand-rolled closability checks instead of extension-aware checks
+- CPI close flows that ignore CPI Guard destination restrictions
+- close flows that ignore `TransferFeeAmount.withheld_amount`
+- close flows that ignore confidential pending or available balances
+- close flows that ignore `ConfidentialTransferFeeAmount.withheld_amount`
+
+Impact:
+- stuck user exits
+- stuck escrows or vault cleanup
+- full instruction reverts when close is part of a larger flow
+
+Fix direction:
+- use each extension's `closable()` logic instead of hand-rolling checks
+- inspect withheld balances and confidential balances explicitly if implementing custom close flows
+
+## transfer vs transfer_checked
+
+Look for:
+- `anchor_spl::token::transfer`
+- Token-2022 flows using plain `transfer` instead of `transfer_checked`
+- missing mint account or decimals in transfer paths
+
+Impact:
+- transfers fail with `MintRequiredForTransfer`
+- integrations break only for extension-enabled tokens
+
+Fix direction:
+- use `anchor_spl::token_interface`
+- use `transfer_checked` for Token-2022
+- use `transfer_checked_with_fee` when fee-bearing tokens are supported
+
+## Dynamic Rent and Account Size
+
+Look for:
+- hardcoded `165` byte token-account assumptions
+- hardcoded rent values for token accounts
+- backend or keeper flows paying for user-created extension accounts
+
+Impact:
+- account creation failure
+- keeper or relayer overpayment
+- DoS for extension-bearing account creation
+
+Fix direction:
+- compute rent dynamically with extension-aware helpers
+- do not assume classic SPL token-account size
+- avoid keeper-funded account creation when users control the extension space
+
+## Mint Initialization Order
+
+Look for:
+- mint creation flows that initialize the base mint before all required extensions
+- designs that expect mint extensions to be added after initialization
+- backend code that allocates mint space as if it were a classic SPL mint
+
+Impact:
+- extension setup failure
+- incorrect mint layout
+- redesign pressure that leads teams toward unsafe close-and-reinitialize workflows
+
+Fix direction:
+- decide the full extension set up front
+- allocate extension-aware mint space before initialization
+- initialize required extensions before initializing the base mint
+
 ## Group Pointer / Metadata Pointer
 
 Look for:
 - logic that treats pointer presence as sufficient proof of identity
 - missing bidirectional verification
+- group or group-member flows that trust only one side of the pointer relationship
 
 Impact:
 - spoofed identity
@@ -196,6 +269,7 @@ Usually breaks under:
 - transfer fees
 - failed memo-required transfers
 - hook-governed transfers
+- fee rounding differences from mismatched fee helpers
 
 ### Immediate-Usability Assumption
 
@@ -232,3 +306,14 @@ Usually breaks under:
 - transfer hook
 - memo transfer
 - CPI guard
+- plain `transfer` used against Token-2022 extension-bearing accounts
+
+### SPL-Compat Assumption
+
+Red flag:
+- protocol reuses classic SPL constants, rent values, or closability rules
+
+Usually breaks under:
+- extension-sized token accounts
+- extension-specific close restrictions
+- Token-2022 transfer requirements

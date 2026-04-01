@@ -25,6 +25,12 @@ Token-2022 mint accounts also append extension data. Treat every mint as potenti
 
 Mint extensions are fixed at creation time. Plan the full extension set up front, and respect any dependency constraints between mint extensions before initialization succeeds.
 
+Permanent delegate on a mint is a high-risk authority. If present, it can transfer or burn from any token account for that mint, and transfer paths may authorize it automatically.
+
+Interest-bearing mints use a fixed timestamp-based formula for UI conversions. If a project expects a different interest model, or if it relies on slot-based or custom rate calculations, this extension is not a drop-in fit.
+
+Transfer-fee mints need explicit accounting for net received amounts, fee rounding, fee configuration delay, and withheld-fee harvesting. Do not treat `calculate_fee` and `calculate_inverse_fee` as strict inverses, and do not assume `withheld_amount` is real-time without harvesting.
+
 Be careful with wrapped SOL. SPL Token WSOL and Token-2022 WSOL use different mint addresses, so contracts that special-case WSOL should distinguish them explicitly and avoid treating the Token-2022 WSOL as the canonical one by default.
 
 SPL Token and Token-2022 are separate programs with different program IDs. Any code that uses token-program SDK helpers or CPIs must make the target program explicit instead of relying on library defaults.
@@ -168,6 +174,11 @@ At minimum, inspect mint-side extensions:
 - group member pointer
 - group member
 
+For metadata, group, and member-style mint identity:
+- anyone can create separate metadata, group, or group-member accounts and point them at a legitimate mint
+- only the data referenced by the mint's pointer is authoritative
+- data may live inside the mint extension or in a separate account, so verify the mutual reference relationship before trusting it
+
 If the protocol special-cases WSOL:
 - verify whether it means SPL Token WSOL or Token-2022 WSOL
 - consider blacklisting the Token-2022 WSOL mint if the product only intends to support the canonical SPL WSOL
@@ -184,6 +195,20 @@ At minimum, inspect mint-close behavior:
 - `MintCloseAuthority`
 - supply must be zero before close
 - protocol state that depends on a mint not being re-created at the same address
+- `Metadata`
+- `Group`
+- `GroupMember`
+- `MetadataPointer`
+- `GroupPointer`
+- `GroupMemberPointer`
+- `PermanentDelegate`
+- `InterestBearingConfig`
+- `AmountToUiAmount`
+- `UiAmountToAmount`
+- `calculate_pre_fee_amount`
+- `getTransferFeeConfig`
+- `getEpochFee`
+- `HarvestWithheldTokensToMint`
 
 At minimum, inspect:
 - immutable owner
@@ -253,6 +278,16 @@ Breaks under:
 - `MintCloseAuthority`
 - zero-supply close and reinitialization at the same address
 
+### Theme: Permanent Delegate Assumption
+
+Red flag:
+- protocol assumes the mint cannot move or burn user funds outside normal account-owner approvals
+
+Breaks under:
+- `PermanentDelegate`
+- automatic authorization of the permanent delegate in transfer paths
+- vaults that trust live balances without accounting for delegate power
+
 ### Theme: Vault-Can’t-Be-Drained Assumption
 
 Red flag:
@@ -285,6 +320,36 @@ Breaks under:
 - `TransferFee`
 - `transfer_checked`
 - `transfer_checked_with_fee`
+
+### Theme: Interest Formula Assumption
+
+Red flag:
+- protocol assumes the mint’s interest formula matches its own accounting model
+
+Breaks under:
+- timestamp-based UI conversion only
+- slot-based or custom interest expectations
+- network timestamp drift or halted production causing different UI conversions
+
+### Theme: Fee Accounting Assumption
+
+Red flag:
+- protocol assumes transfer fees are immediately reflected as the nominal transfer amount or that fee helpers are exact inverses
+
+Breaks under:
+- `TransferFee`
+- `calculate_fee` vs `calculate_inverse_fee` rounding differences
+- withheld-fee values that are not synchronized until harvested
+- transfer-fee config changes that do not take effect immediately
+
+### Theme: Metadata Identity Assumption
+
+Red flag:
+- protocol trusts metadata, group, or member data without verifying the mint-pointer relationship
+
+Breaks under:
+- spoofed metadata / group / member accounts pointing at a legitimate mint
+- embedded metadata living in the mint itself versus a separate account
 
 ### Theme: WSOL Identity Assumption
 

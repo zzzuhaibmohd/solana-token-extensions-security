@@ -31,6 +31,14 @@ Token-2022 mint accounts are classic SPL mints plus extension data. On the mint 
 
 Mint extensions are fixed at creation time. If a mint needs multiple extensions, make sure you satisfy any dependency ordering before initialization.
 
+Metadata, group, and member-style mint data can live either inside the mint extension area or in a separate account. Anyone can create a metadata, group, or group-member account and point it at a legitimate mint, so the mint-pointer relationship is the authoritative trust check.
+
+Permanent delegate is a high-risk mint authority. If present, it can transfer or burn from any token account for that mint, and transfer paths may automatically authorize it without requiring the source account owner.
+
+Interest-bearing mints use a fixed timestamp-based formula for UI conversions. If a project expects a different interest model, or if it relies on slot-based or custom rate calculations, this extension is not a drop-in fit.
+
+Transfer-fee mints need explicit accounting for net received amounts, fee rounding, fee configuration delay, and withheld-fee harvesting. Do not treat `calculate_fee` and `calculate_inverse_fee` as strict inverses, and do not assume `withheld_amount` is real-time without harvesting.
+
 Wrapped SOL has two common mint addresses in the ecosystem:
 - SPL Token WSOL: `So11111111111111111111111111111111111111112`
 - Token-2022 WSOL: `9pan9bMn5HatX4EJdBwg9VgCa7Uz5HL8N1m5D3NdXejP`
@@ -53,8 +61,12 @@ Look for:
 - escrow or vault logic crediting the nominal amount instead of net received amount
 - missing use of fee-aware transfer instructions
 - code mixing `calculate_fee` and `calculate_inverse_fee` as if they are true inverses
+- code assuming `calculate_pre_fee_amount` is interchangeable with fee estimates derived elsewhere
 - close-account flows that ignore `withheld_amount`
 - logic that assumes source and destination deltas match
+- fee updates assumed to take effect immediately instead of after the epoch delay
+- fee configs that leave `maximum_fee` unset or incorrectly defaulted
+- code that assumes `TransferFeeConfig.withheld_amount` is synchronized with every transfer in real time
 
 Impact:
 - accounting mismatch
@@ -62,12 +74,17 @@ Impact:
 - stuck close flows
 - silent long-tail rounding loss from 1-unit mismatches across volume
 - fee bypass in edge cases involving stale accounts or reinitialized mints
+- hidden 2-epoch delay where fee config changes have not yet taken effect
+- inaccurate withheld-fee reporting until harvest is invoked
 
 Fix direction:
 - use fee-aware instructions where possible
 - prefer `transfer_checked_with_fee` with the exact expected fee
 - compare balances before and after transfer
 - harvest withheld fees before close
+- use `calculate_pre_fee_amount` only when the protocol really needs to invert from post-fee to pre-fee amounts
+- query `getTransferFeeConfig` and `getEpochFee` when you need the effective fee schedule
+- treat `HarvestWithheldTokensToMint` as the synchronization step for withheld fees
 
 ## Mint Close Authority
 
@@ -90,15 +107,23 @@ Look for:
 - shared protocol vaults holding tokens from untrusted mints
 - accounting that assumes no external party can transfer or burn vault funds
 - insolvency-sensitive designs with no recheck of live balances
+- protocols that do not explicitly define policy for mints with permanent delegate enabled
+- systems that accept deposits before verifying the permanent delegate is trusted
+- missing monitoring or alerting for mint authorities that can drain assets
 
 Impact:
 - external drain or burn of vault assets
 - insolvency / bad debt / reserve mismatch
+- unexpected losses from delegate-authorized transfers
+- unmonitored mint authority actions
 
 Fix direction:
 - trust-list mints
 - model external balance mutation as possible
 - recheck balances before sensitive settlement
+- define and document permanent-delegate policy explicitly
+- monitor or alert on permanent-delegate activity where possible
+- only accept assets from mints whose permanent delegate is trusted
 
 ## Default Account State
 
@@ -300,15 +325,19 @@ Look for:
 - code that assumes metadata or group membership is cosmetic and never needs validation
 - allowlist or collection logic that trusts only one side of the reference
 - group-member validation that does not also verify the canonical mint or group account
+- contracts that trust separately created metadata, group, or group-member accounts without verifying the mint's pointer
+- code that fails to distinguish embedded mint-side metadata from separately created accounts
 
 Impact:
 - spoofed collection membership
 - fake identity or provenance
 - incorrect allowlist or gating decisions
+- authoritative data confusion between embedded and external accounts
 
 Fix direction:
 - verify both directions of the mint-to-metadata and mint-to-group relationships
 - treat metadata, group, and group-member extensions as identity inputs when used for auth or policy
+- prefer the mint's pointer as the source of truth when external and embedded data disagree
 
 ## WSOL Identity
 
@@ -389,13 +418,20 @@ Fix direction:
 
 Look for:
 - protocol logic using UI amounts instead of raw amounts
+- projects that assume a non-timestamp interest formula
+- systems that rely on strict precision between UI conversions and actual accounting
+- logic that treats network timestamp drift as impossible or irrelevant
 
 Impact:
 - user-facing confusion
 - incorrect display logic
+- UI amount mismatch against expected interest model
+- apparent balance drift when timestamps are unstable
 
 Fix direction:
 - use raw amounts for protocol accounting
+- treat `AmountToUiAmount` and `UiAmountToAmount` as UI helpers, not as authoritative settlement math
+- confirm the timestamp-based formula matches the project’s intended interest model before support is added
 
 ## Confidential Transfer / Confidential Transfer Fee
 

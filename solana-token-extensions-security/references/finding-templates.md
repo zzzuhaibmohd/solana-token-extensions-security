@@ -97,3 +97,9 @@ Use these when drafting findings:
 - The protocol treats wrapped SOL as a single canonical mint, which is false because SPL Token WSOL and Token-2022 WSOL use different mint addresses.
 - The protocol relies on token SDK defaults for program ID selection, which can silently route Token-2022 logic to the SPL Token program.
 - The protocol uses `token_interface` without explicitly intending to support Token-2022, which can create ambiguous behavior in an SPL-only contract.
+- The protocol trusts separately created metadata, group, or member accounts without verifying the mint's authoritative pointer, so spoofed identity data can be accepted.
+- The protocol accepts a mint with `PermanentDelegate` without defining or monitoring delegate policy, so any delegate-authorized transfer can drain protocol funds.
+- The protocol treats interest-bearing UI conversions as authoritative accounting, which is unsafe because the extension is timestamp-based and intended for UI representation.
+- The protocol assumes transfer-fee helper calculations are exact inverses, which can create 1-unit rounding mismatches and stale-withheld accounting.
+- The protocol assumes transfer-fee configuration changes are immediate, which is false because fee updates take effect only after the epoch delay.
+- The protocol assumes withheld fees are real-time without harvest, which is false because `withheld_amount` is only synchronized when harvested to the mint.

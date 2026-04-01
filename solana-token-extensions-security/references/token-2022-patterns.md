@@ -2,6 +2,51 @@
 
 Use this file when you want extension-specific exploit ideas, broken assumptions, and fix directions during review.
 
+Token-2022 token accounts are classic SPL accounts plus extension data. On the account side, the recurring extensions you should expect are:
+- immutable owner
+- CPI guard
+- required memo on transfer
+- non-transferable
+- transfer fees
+- transfer hook
+- confidential transfer
+- confidential transfer fee
+
+Token-2022 mint accounts are classic SPL mints plus extension data. On the mint side, the recurring extensions you should expect are:
+- non-transferable tokens
+- transfer fees
+- transfer hook
+- confidential transfer
+- confidential transfer fee
+- mint close authority
+- default account state
+- interest-bearing tokens
+- permanent delegate
+- metadata pointer
+- metadata
+- group pointer
+- group
+- group member pointer
+- group member
+
+Mint extensions are fixed at creation time. If a mint needs multiple extensions, make sure you satisfy any dependency ordering before initialization.
+
+Wrapped SOL has two common mint addresses in the ecosystem:
+- SPL Token WSOL: `So11111111111111111111111111111111111111112`
+- Token-2022 WSOL: `9pan9bMn5HatX4EJdBwg9VgCa7Uz5HL8N1m5D3NdXejP`
+
+If a protocol special-cases WSOL, make sure it distinguishes these addresses explicitly. For products that only intend to support canonical SPL WSOL, blacklisting the Token-2022 WSOL mint can avoid ambiguity.
+
+SPL Token and Token-2022 are separate programs with different program IDs:
+- SPL Token: `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`
+- Token-2022: `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`
+
+When a helper or CPI can work with either program, do not rely on the SDK default. Make the intended program explicit.
+
+Decide up front whether the contract supports Token-2022:
+- if yes, prefer `anchor_spl::token_interface`
+- if no, prefer classic SPL token types and avoid interface-based ambiguity
+
 ## Transfer Fees
 
 Look for:
@@ -127,6 +172,7 @@ Look for:
 - close flows that ignore `TransferFeeAmount.withheld_amount`
 - close flows that ignore confidential pending or available balances
 - close flows that ignore `ConfidentialTransferFeeAmount.withheld_amount`
+- close flows that ignore the CPI Guard destination-owner rule in CPI contexts
 
 Impact:
 - stuck user exits
@@ -136,22 +182,46 @@ Impact:
 Fix direction:
 - use each extension's `closable()` logic instead of hand-rolling checks
 - inspect withheld balances and confidential balances explicitly if implementing custom close flows
+- if closing via CPI, enforce the owner-destination rule before invoking the close instruction
+
+## Reallocation
+
+Look for:
+- account extensions that are added after initial account creation
+- reallocate flows that do not treat extra rent as a protocol cost decision
+- create-reallocate helper usage that ignores `payer`
+- backend flows that assume account size can never change after creation
+
+Impact:
+- unexpected rent loss
+- account creation or extension enablement failure
+- keeper or protocol overpaying when users control the extension set
+
+Fix direction:
+- make reallocation an explicit part of the account lifecycle
+- decide who pays additional rent before invoking reallocation
+- use extension-aware rent and size calculations at the time of reallocation
 
 ## transfer vs transfer_checked
 
 Look for:
 - `anchor_spl::token::transfer`
 - Token-2022 flows using plain `transfer` instead of `transfer_checked`
+- Token-2022 flows using plain `transfer` instead of `transfer_checked_with_fee`
 - missing mint account or decimals in transfer paths
+- code that ignores `MintRequiredForTransfer`
+- call sites that do not provide the mint when the token requires hook or fee resolution
 
 Impact:
 - transfers fail with `MintRequiredForTransfer`
 - integrations break only for extension-enabled tokens
+- fee-bearing or hook-bearing transfers revert even when the code looks valid in classic SPL Token
 
 Fix direction:
 - use `anchor_spl::token_interface`
 - use `transfer_checked` for Token-2022
 - use `transfer_checked_with_fee` when fee-bearing tokens are supported
+- prefer mint-aware transfer paths whenever the mint can carry `TransferHook` or `TransferFee` extensions
 
 ## Dynamic Rent and Account Size
 
@@ -159,6 +229,7 @@ Look for:
 - hardcoded `165` byte token-account assumptions
 - hardcoded rent values for token accounts
 - backend or keeper flows paying for user-created extension accounts
+- runtime account creation that ignores `getMinimumBalanceForRentExemptAccountWithExtensions`
 
 Impact:
 - account creation failure
@@ -176,16 +247,36 @@ Look for:
 - mint creation flows that initialize the base mint before all required extensions
 - designs that expect mint extensions to be added after initialization
 - backend code that allocates mint space as if it were a classic SPL mint
+- mint extension combinations that ignore dependency constraints
 
 Impact:
 - extension setup failure
 - incorrect mint layout
 - redesign pressure that leads teams toward unsafe close-and-reinitialize workflows
+- mint initialization reverting because a required companion extension was not enabled
 
 Fix direction:
 - decide the full extension set up front
 - allocate extension-aware mint space before initialization
 - initialize required extensions before initializing the base mint
+- enforce mint-extension dependency ordering in the mint-creation flow
+
+## Mint Close Authority
+
+Look for:
+- protocol state that assumes a mint address can never be closed and recreated
+- mint-derived caches or registry entries that are not refreshed after close/recreate
+- close flows that do not confirm mint supply is zero before close
+
+Impact:
+- stale mint-derived state
+- inconsistent protocol metadata
+- close-and-recreate history that invalidates trust assumptions
+
+Fix direction:
+- treat mint close as a provenance event
+- refresh mint-derived state from the canonical mint account
+- do not trust a mint address alone to imply stable history
 
 ## Group Pointer / Metadata Pointer
 
@@ -202,6 +293,71 @@ Impact:
 Fix direction:
 - verify mint points to metadata/group
 - verify metadata/group points back to mint
+
+## Mint Identity and Grouping
+
+Look for:
+- code that assumes metadata or group membership is cosmetic and never needs validation
+- allowlist or collection logic that trusts only one side of the reference
+- group-member validation that does not also verify the canonical mint or group account
+
+Impact:
+- spoofed collection membership
+- fake identity or provenance
+- incorrect allowlist or gating decisions
+
+Fix direction:
+- verify both directions of the mint-to-metadata and mint-to-group relationships
+- treat metadata, group, and group-member extensions as identity inputs when used for auth or policy
+
+## WSOL Identity
+
+Look for:
+- contracts that special-case WSOL without checking whether the mint is SPL Token or Token-2022
+- DeFi logic that assumes one canonical wrapped SOL mint
+- blacklist or allowlist logic that omits the Token-2022 WSOL mint
+
+Impact:
+- ambiguous asset handling
+- incorrect routing or pricing assumptions
+- unintended support for Token-2022 WSOL in products that only intend canonical SPL WSOL
+
+Fix direction:
+- explicitly compare against the exact WSOL mint addresses you support
+- blacklist the Token-2022 WSOL mint when the product only supports SPL WSOL
+
+## Program ID Selection
+
+Look for:
+- SDK helpers that default to the SPL Token program ID
+- CPIs that omit the token program account or pass the wrong one
+- code that assumes a shared interface implies shared program behavior
+
+Impact:
+- Token-2022 instructions routed to SPL Token
+- `MintRequiredForTransfer` or extension-related failures
+- subtle mismatches between intended and actual token-program behavior
+
+Fix direction:
+- explicitly set the token program ID at every CPI boundary
+- treat SDK defaults as unsafe unless the product only supports SPL Token
+
+## Interface Selection
+
+Look for:
+- contracts that import `anchor_spl::token_interface` without intending to support Token-2022
+- code that mixes SPL-only assumptions with interface-based token abstractions
+- audit targets that do not declare a token-program support policy up front
+
+Impact:
+- ambiguous program behavior
+- accidental extension compatibility exposure
+- surprising CPI or account-type mismatches
+
+Fix direction:
+- decide support policy before implementation
+- use `token_interface` only when Token-2022 support is intended
+- use `anchor_spl::token::Token` for SPL-only contracts
 
 ## Immutable Owner
 

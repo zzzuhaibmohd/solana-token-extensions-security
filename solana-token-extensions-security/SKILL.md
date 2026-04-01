@@ -19,6 +19,18 @@ Assume the target may be vulnerable whenever it:
 - treats token balances as invariant despite permanent delegates, mint authorities, or seizure-style controls
 - hardcodes token-account size, rent, or closeability assumptions from classic SPL Token
 
+Token-2022 token accounts keep the classic SPL Token account layout and append extension data. Treat every token account as potentially carrying extra rules that affect transferability, closure, ownership, or confidentiality.
+
+Token-2022 mint accounts also append extension data. Treat every mint as potentially carrying extra rules that affect supply, fees, transfer policy, account state, identity, provenance, or group membership.
+
+Mint extensions are fixed at creation time. Plan the full extension set up front, and respect any dependency constraints between mint extensions before initialization succeeds.
+
+Be careful with wrapped SOL. SPL Token WSOL and Token-2022 WSOL use different mint addresses, so contracts that special-case WSOL should distinguish them explicitly and avoid treating the Token-2022 WSOL as the canonical one by default.
+
+SPL Token and Token-2022 are separate programs with different program IDs. Any code that uses token-program SDK helpers or CPIs must make the target program explicit instead of relying on library defaults.
+
+Before auditing a contract, decide whether it is meant to support Token-2022. If Token-2022 support is intended, `anchor_spl::token_interface` is the right path; if not, prefer classic SPL token types and avoid accidental ambiguity from interface-based helpers.
+
 ## Review Goal
 
 Find places where protocol assumptions and Token-2022 behavior diverge.
@@ -47,10 +59,12 @@ Prioritize:
    - token account owner immutable or meaningful
    - mint config stable forever
    - mint extensions can be added or changed later without redesigning initialization
+   - token-account size is fixed after creation
    - no third party can drain or burn vault funds
    - transfers only execute local logic
    - `amount == 0` is sufficient for token-account closure
    - SPL token account size / rent values still apply
+   - reallocation is a rare edge case rather than a normal lifecycle step
 4. Try to falsify each assumption using Token-2022 extensions.
 5. Report the issue in exploit terms:
    - attacker setup
@@ -104,7 +118,16 @@ Search for these first:
 - `getMinimumBalanceForRentExemptAccountWithExtensions`
 - `MintRequiredForTransfer`
 - `anchor_spl::token::transfer`
+- `transfer_checked_with_fee`
 - `165`
+- `reallocate`
+- `createReallocateInstruction`
+- `So11111111111111111111111111111111111111112`
+- `9pan9bMn5HatX4EJdBwg9VgCa7Uz5HL8N1m5D3NdXejP`
+- `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`
+- `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`
+- `anchor_spl::token_interface`
+- `anchor_spl::token::Token`
 
 Also search for logic that:
 - compares expected and actual token balances
@@ -116,26 +139,71 @@ Also search for logic that:
 - closes accounts using only `amount == 0`
 - creates token accounts for users from keeper or relayer infrastructure
 - initializes the mint before initializing the intended extensions
+- reallocates token accounts without deciding who pays the extra rent
+- initializes a mint without satisfying mint-extension dependency constraints
+- stores mint-derived state as if the mint can never be closed and recreated
+- calls deprecated plain `transfer` on Token-2022 paths that need mint-aware transfer details
+- special-cases WSOL without distinguishing SPL Token WSOL from Token-2022 WSOL
+- relies on SDK defaults that point at the SPL Token program when Token-2022 is intended
+- mixes `token_interface` helpers into a contract that is not meant to support Token-2022
 
 ## Extension Review Checklist
 
 Use the extension checklist in [token-2022-patterns.md](/Users/zuhaib44/Documents/New project 2/solana-token-extensions-security/references/token-2022-patterns.md) for detailed extension-by-extension review prompts.
 
-At minimum, inspect:
+At minimum, inspect mint-side extensions:
+- non-transferable tokens
 - transfer fees
+- transfer hook
+- confidential transfer
+- confidential transfer fee
+- mint close authority
+- default account state
+- interest-bearing tokens
+- permanent delegate
+- metadata pointer
+- metadata
+- group pointer
+- group
+- group member pointer
+- group member
+
+If the protocol special-cases WSOL:
+- verify whether it means SPL Token WSOL or Token-2022 WSOL
+- consider blacklisting the Token-2022 WSOL mint if the product only intends to support the canonical SPL WSOL
+
+If the protocol uses token SDK helpers or CPIs:
+- verify the program ID is explicitly Token-2022 when Token-2022 behavior is required
+- verify helper defaults are not silently pointing at SPL Token
+
+Check mint-extension dependency ordering before initialization:
+- confidential transfer fee requires transfer fee and confidential transfer
+- transfer fee plus confidential transfer requires confidential transfer fee
+
+At minimum, inspect mint-close behavior:
+- `MintCloseAuthority`
+- supply must be zero before close
+- protocol state that depends on a mint not being re-created at the same address
+
+At minimum, inspect:
+- immutable owner
+- CPI guard
+- required memo on transfer
+- non-transferable tokens
+- transfer fees
+- transfer hook
+- confidential transfer
+- confidential transfer fee
+- token-account reallocation
 - mint close authority
 - permanent delegate
 - default account state
 - memo transfer
-- CPI guard
-- transfer hook
 - token account closure logic
 - rent and account-size calculation
 - `transfer` vs `transfer_checked`
 - metadata pointer / group pointer
-- immutable owner
-- non-transferable
-- confidential transfer / confidential transfer fee
+- metadata / group / group member pointer
 
 ## Common Vulnerability Themes
 
@@ -167,6 +235,24 @@ Red flag:
 Breaks under:
 - close-and-reinitialize
 
+### Theme: Mint Dependency Assumption
+
+Red flag:
+- protocol assumes mint extensions can be initialized in any order or combined arbitrarily
+
+Breaks under:
+- hidden extension dependency constraints
+- missing `confidential transfer` / `transfer fee` / `confidential transfer fee` ordering
+
+### Theme: Mint-Recreate Assumption
+
+Red flag:
+- protocol stores mint-derived state as if the mint address can never be closed and recreated
+
+Breaks under:
+- `MintCloseAuthority`
+- zero-supply close and reinitialization at the same address
+
 ### Theme: Vault-Can’t-Be-Drained Assumption
 
 Red flag:
@@ -187,6 +273,45 @@ Breaks under:
 - memo transfer
 - CPI guard
 - calling deprecated `transfer` on Token-2022 flows that require mint-aware transfer paths
+- transfer-hook or transfer-fee accounts that return `MintRequiredForTransfer` unless the mint is supplied
+
+### Theme: Mint-Aware Transfer Assumption
+
+Red flag:
+- protocol uses `transfer` when the token path needs the mint, decimals, or expected fee
+
+Breaks under:
+- `TransferHook`
+- `TransferFee`
+- `transfer_checked`
+- `transfer_checked_with_fee`
+
+### Theme: WSOL Identity Assumption
+
+Red flag:
+- protocol assumes there is only one wrapped SOL mint or special-cases WSOL without checking the program family
+
+Breaks under:
+- Token-2022 WSOL mint address differs from SPL Token WSOL
+- ambiguous SOL/WSOL handling in DeFi integrations
+
+### Theme: Program-ID Assumption
+
+Red flag:
+- protocol assumes SDK helpers or CPIs will automatically target the right token program
+
+Breaks under:
+- SPL Token helper defaults pointing to the SPL Token program
+- explicit Token-2022 behavior requiring `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`
+
+### Theme: Interface-Selection Assumption
+
+Red flag:
+- protocol uses `token_interface` without having decided to support Token-2022
+
+Breaks under:
+- SPL-only contracts that accidentally become ambiguous
+- helper paths that should have used `anchor_spl::token::Token`
 
 ### Theme: SPL-Compat Assumption
 
@@ -199,6 +324,16 @@ Breaks under:
 - confidential-transfer pending and available balances
 - CPI-guard close restrictions
 - mint extensions needing upfront allocation and initialization order
+
+### Theme: Reallocation Assumption
+
+Red flag:
+- protocol assumes token-account size is fixed forever after creation
+
+Breaks under:
+- account extensions added later
+- extra-rent payer mismatches
+- keeper-funded account creation
 
 ## Reporting Template
 

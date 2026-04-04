@@ -39,6 +39,16 @@ Choose one:
 - Medium: code strongly suggests the issue, but one assumption still needs verification
 - Low: issue is plausible but not yet sufficiently proven
 
+### Confidence Score
+
+Use a numeric score from `0.0` to `1.0`.
+
+Suggested mapping:
+- `0.9` to `1.0`: direct code proof plus docs or repro
+- `0.6` to `0.8`: strong code evidence, one assumption left
+- `0.3` to `0.5`: plausible but missing runtime proof
+- `0.0` to `0.2`: speculative or weakly supported
+
 ### Evidence
 
 State the proof quality:
@@ -47,6 +57,13 @@ State the proof quality:
 - issue-supported
 - local repro
 - confirmed exploit path
+
+### Alice/Bob Scenario
+
+Write the smallest believable exploit story:
+- Alice is the attacker or adversarial user
+- Bob is the protocol, keeper, vault, or victim user
+- describe the minimal action sequence that turns the bug into a PoC
 
 ### Exploit Path
 
@@ -71,6 +88,12 @@ State:
 - minimal fix
 - stronger systemic fix
 
+### PoC Notes
+
+- keep the proof-of-concept path short
+- use the Alice/Bob scenario to describe the steps in plain language
+- include the exact extension(s) needed for the repro
+
 ## Confidence Matrix
 
 Use this to classify certainty separately from severity:
@@ -89,6 +112,15 @@ Use this to classify certainty separately from severity:
 - weak or indirect evidence
 - depends on an inferred edge case
 - more validation needed before filing as a finding
+
+## Fast Parallel Review Plan
+
+When auditing a larger codebase, split the work into parallel passes:
+
+- Pass 1: transfer flows, fee math, hooks, memo constraints, and balance accounting
+- Pass 2: mint lifecycle, extension sizing, close-and-reinitialize risk, and authority model
+- Pass 3: metadata, group identity, WSOL identity, program IDs, and interface selection
+- Pass 4: vault / escrow / staking semantics and live balance reconciliation
 
 ## Severity Heuristics
 

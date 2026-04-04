@@ -149,9 +149,22 @@ The skill is designed to catch bugs caused by wrong assumptions, especially when
 The repo includes a built-in reporting flow:
 - `Severity` tells you how bad the issue is
 - `Confidence` tells you how sure you are
+- `Confidence Score` gives you a numeric certainty from `0.0` to `1.0`
 - `Evidence` tells you what supports the finding
+- `Alice/Bob Scenario` turns the bug into a short PoC story you can test quickly
 
 This makes it easier to triage findings consistently across real audits.
+
+## Faster Review Workflow
+
+For larger codebases, split the work into parallel passes when your tooling supports it:
+
+- transfer flows, accounting, fees, hooks, and memo constraints
+- mint lifecycle, extension sizing, close-and-reinitialize risk, and authority model
+- metadata, group identity, WSOL identity, program IDs, and interface selection
+- vault, escrow, staking, and live balance reconciliation
+
+That approach keeps reviews faster and helps you compare findings across independent paths.
 
 ## Reference Material Used To Build The Skill
 
@@ -177,4 +190,3 @@ That keeps the package small, readable, and easy to extend over time.
 - This repo is intentionally lightweight and markdown-first.
 - The skill files are meant to be copied, referenced, or embedded into other review workflows.
 - The repository root is the canonical location for the skill package.
-

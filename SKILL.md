@@ -19,6 +19,12 @@ Use the issue bank in [token-2022-patterns.md](references/token-2022-patterns.md
 
 Use the confidence matrix in [finding-templates.md](references/finding-templates.md) to record how sure you are about each finding separately from severity.
 
+For larger audits, split the review into parallel passes when possible:
+- one pass for transfer flows, accounting, fees, hooks, and memo constraints
+- one pass for mint lifecycle, extension sizing, close-and-reinitialize risk, and authority model
+- one pass for metadata, group, WSOL identity, program IDs, and interface-selection ambiguity
+- one pass for vault / escrow / staking semantics and live balance reconciliation
+
 Assume the target may be vulnerable whenever it:
 - trusts mint/account state without verifying extensions
 - assumes all SPL-like tokens behave like classic SPL Token
@@ -430,11 +436,21 @@ High / Medium / Low / Info.
 
 High / Medium / Low.
 
+### Confidence Score
+
+Use a numeric score from `0.0` to `1.0`.
+
 ### Evidence
 
 - code path
 - docs or issue reference
 - local repro or test result
+
+### Alice/Bob Scenario
+
+- Alice: attacker or adversarial actor
+- Bob: victim, protocol, or keeper
+- show the smallest believable exploit or PoC path between Alice and Bob
 
 ### Preconditions
 
@@ -470,6 +486,8 @@ Use severity and confidence separately:
 - severity measures impact
 - confidence measures certainty
 - evidence explains why the confidence rating is justified
+- confidence score should reflect how much of the exploit path is proven, not how severe the impact is
+- Alice/Bob scenario should be short, concrete, and easy to convert into a PoC
 
 ## Strong Default Heuristics
 

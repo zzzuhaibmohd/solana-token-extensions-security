@@ -183,6 +183,12 @@ As you discover new issues, add them in three places:
 2. Add a report-ready one-liner to `references/finding-templates.md`
 3. Add a short review heuristic to `SKILL.md` if the pattern is important enough to remember during triage
 
+When you add a new finding, keep it general first:
+
+- describe the reusable Token-2022 bug class
+- use protocol-specific examples only as illustrations
+- avoid wording that only fits one protocol unless the bug truly depends on that architecture
+
 That keeps the package small, readable, and easy to extend over time.
 
 ## Notes

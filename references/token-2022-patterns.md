@@ -76,6 +76,24 @@ Fix direction:
 - use fee-aware transfer paths
 - reconcile balances before and after sensitive flows
 
+### Nominal Credit vs Spendable Balance Mismatch
+
+Look for:
+- vaults, reserves, or user-credit ledgers that record a nominal input amount instead of observed received balance
+- deposit, exit, fee, or reward flows that trust the sender-side transfer amount without reconciling the receiver-side delta
+- state variables that are later treated as fully spendable even though the underlying token account may have received less
+
+Impact:
+- accounting insolvency
+- withdrawal DoS
+- silent underpayment or over-crediting
+- payout failure during later settlement or cleanup paths
+
+Fix direction:
+- measure the actual receiver-side balance delta
+- store or credit the observed amount rather than the nominal input when the token behavior can differ
+- cap later payouts by the real spendable balance and fail with an explicit insolvency error if needed
+
 ### Permanent-Delegate Vault Custody Break
 
 Look for:
@@ -111,6 +129,40 @@ Fix direction:
 - use mint-aware transfer instructions
 - validate hook-supported mint sets explicitly
 
+### Remaining-Accounts Forwarding Gap
+
+Look for:
+- manually constructed CPI instructions that hardcode `remaining_accounts_info` to `None`
+- wrapper functions that never forward `remaining_accounts` into downstream CPI calls
+- token-hook-aware flows that support some mints but drop the extra account payload required by hook-enabled paths
+
+Impact:
+- CPI failure when downstream programs require extra accounts
+- inability to support hook-enabled or extra-account-driven token flows
+- exit, collect, reward, or settlement paths becoming unusable for compatible mints
+
+Fix direction:
+- forward `remaining_accounts` whenever the downstream program may need extra account metas
+- treat hook-aware CPIs as data-driven, not fixed-arity, wrappers
+- test the wrapper with at least one hook-enabled mint and one no-hook mint
+
+### Remaining-Accounts Forwarding Gap
+
+Look for:
+- manually constructed CPI instructions that hardcode `remaining_accounts_info` to `None`
+- wrapper functions that never forward `remaining_accounts` into downstream CPI calls
+- Token-2022 or token-hook aware protocols that support some mints but not the extra account payload required by hook-enabled paths
+
+Impact:
+- CPI failure when downstream programs require extra accounts
+- inability to support hook-enabled or extra-account-driven token flows
+- exit, collect, reward, or settlement paths becoming unusable for compatible mints
+
+Fix direction:
+- forward `remaining_accounts` whenever the downstream program may need extra account metas
+- treat hook-aware CPIs as data-driven, not fixed-arity, wrappers
+- test the wrapper with at least one hook-enabled mint and one no-hook mint
+
 ### Mint Extension Sizing Failure
 
 Look for:
@@ -127,6 +179,41 @@ Fix direction:
 - construct the full extension list first
 - calculate mint size only after all conditional extensions are present
 - size the mint for the final extension set before calling `create_account`
+
+### Confidential Proof Validation Truncation
+
+Look for:
+- confidential mint, burn, or transfer validation code that uses `zip` or any length-limited comparison over proof commitments
+- proof extraction routines that compare only the prefix of an expected commitment array
+- unused proof commitments that are not explicitly required to be zero
+
+Impact:
+- malformed confidential-transfer proofs can evade full validation
+- off-chain bugs in commitment assembly become harder to detect
+- mint, burn, or transfer verification can accept inputs with hidden extra commitments
+
+Fix direction:
+- validate the full expected commitment set
+- require all unused proof commitments to be zero
+- do not rely on `zip` when extra elements must also be checked
+
+### Multi-Leg Token-Program CPI Mismatch
+
+Look for:
+- CPI builders that reuse one token-program account across multiple CPI legs
+- multi-asset instructions that accept both SPL Token and Token-2022 inputs but only thread one token program through
+- duplicated `token_program` / `token_program_base` / equivalent accounts that drive separate CPI legs without a deliberate single-program policy
+- any instruction that mixes token-program domains but does not pass the correct program account to each leg
+
+Impact:
+- CPI failure when different legs require different token programs
+- protocol paths that work for one asset pair but break for mixed SPL Token / Token-2022 combinations
+- integration DoS during redeem, withdraw, or settlement operations
+
+Fix direction:
+- pass the correct token-program account to each CPI leg explicitly
+- only reuse one token-program account when the protocol truly enforces a single token-program family
+- validate mixed-program paths during integration tests with at least one SPL Token and one Token-2022 asset pair
 
 ## Transfer Fees
 

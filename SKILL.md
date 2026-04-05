@@ -13,17 +13,29 @@ Read [finding-templates.md](references/finding-templates.md) when writing findin
 
 Use the issue bank in [token-2022-patterns.md](references/token-2022-patterns.md) to map real audit findings to recurring Token-2022 failure modes:
 - fee accounting drift on transfer-fee mints
+- nominal credit vs spendable balance mismatches
 - permanent-delegate vault custody breaks
 - transfer-hook integration gaps and missing extra accounts
+- remaining-accounts forwarding gaps in manual CPI wrappers
 - mint-extension space is computed before all required mint extensions are added
+- mixed token-program CPI wiring reuses one token program across multiple CPI legs
+- confidential proof validation truncates after the expected prefix and ignores unused commitments
 
 Use the confidence matrix in [finding-templates.md](references/finding-templates.md) to record how sure you are about each finding separately from severity.
+
+When adding or writing findings, generalize the bug class whenever possible:
+- describe the reusable Token-2022 failure mode first
+- use protocol-specific examples only as illustrations
+- only keep protocol-specific wording when the bug truly depends on that architecture
 
 For larger audits, split the review into parallel passes when possible:
 - one pass for transfer flows, accounting, fees, hooks, and memo constraints
 - one pass for mint lifecycle, extension sizing, close-and-reinitialize risk, and authority model
 - one pass for metadata, group, WSOL identity, program IDs, and interface-selection ambiguity
 - one pass for vault / escrow / staking semantics and live balance reconciliation
+- one pass for CPI wiring that spans both SPL Token and Token-2022 accounts or multiple token programs in the same instruction
+- one pass for confidential-proof validation and commitment extraction bugs
+- one pass for manual CPI wrappers that may need `remaining_accounts` forwarding
 
 Assume the target may be vulnerable whenever it:
 - trusts mint/account state without verifying extensions
@@ -108,6 +120,8 @@ Ask these immediately during review:
 - Does it still call plain `transfer` instead of `transfer_checked` or `transfer_checked_with_fee`?
 - Does any keeper, relayer, or backend create token accounts for users using user-influenced extension space?
 - Does mint initialization assume extensions can be added later?
+- Does any CPI path reuse one token-program account across multiple CPI legs in the same instruction?
+- Does any manual CPI wrapper hardcode `remaining_accounts_info` to `None` or otherwise drop extra account metas?
 
 If the answer to any is yes, inspect Token-2022 extension interactions before trusting the design.
 
@@ -142,12 +156,15 @@ Search for these first:
 - `165`
 - `reallocate`
 - `createReallocateInstruction`
+- `token_program_base`
+- `token_program`
 - `So11111111111111111111111111111111111111112`
 - `9pan9bMn5HatX4EJdBwg9VgCa7Uz5HL8N1m5D3NdXejP`
 - `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`
 - `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`
 - `anchor_spl::token_interface`
 - `anchor_spl::token::Token`
+- `zip`
 
 Also search for logic that:
 - compares expected and actual token balances
@@ -166,6 +183,9 @@ Also search for logic that:
 - special-cases WSOL without distinguishing SPL Token WSOL from Token-2022 WSOL
 - relies on SDK defaults that point at the SPL Token program when Token-2022 is intended
 - mixes `token_interface` helpers into a contract that is not meant to support Token-2022
+- reuses a single token-program account across multiple CPI legs in the same instruction
+- validates confidential proof commitments with a prefix-only comparison
+- drops `remaining_accounts` from a CPI wrapper that may need extra account metas
 
 ## Extension Review Checklist
 
@@ -190,9 +210,13 @@ At minimum, inspect mint-side extensions:
 
 Issue-derived review patterns:
 - Transfer-fee accounting drift: confirm the protocol books the net received amount, not the nominal transfer amount, and uses fee-aware helpers wherever rounding or withheld-fee state matters.
+- Nominal credit vs spendable balance mismatch: confirm the protocol measures the receiver-side delta when the token behavior can reduce the credited amount.
 - Permanent-delegate custody break: confirm the protocol trust-lists the mint and its delegate model before accepting deposits into shared vaults or reserves.
 - Transfer-hook integration gap: confirm hook-enabled mints are supported end to end, including `remaining_accounts` / extra-account metas, mint-aware transfer instructions, and CPI forwarding where required.
 - Mint-extension sizing failure: confirm the mint-space calculation happens only after every conditional extension has been added to the extension list.
+- Multi-leg token-program CPI mismatch: confirm each CPI leg receives the correct token-program account and that one account is not being reused across token-program domains.
+- Confidential proof validation truncation: confirm every expected commitment is checked and that any unused commitments are explicitly zeroed or rejected.
+- Remaining-accounts forwarding gap: confirm the wrapper forwards extra account metas whenever the downstream CPI may need them.
 
 For metadata, group, and member-style mint identity:
 - anyone can create separate metadata, group, or group-member accounts and point them at a legitimate mint
@@ -523,3 +547,8 @@ When auditing a new extension, add it by preserving this format:
 - exploit shape
 - impact
 - minimal fix
+
+When writing a new pattern, prefer reusable language over protocol-specific language:
+- write the general bug class
+- note the affected protocol type only as an example
+- keep the heuristic useful across multiple Solana codebases whenever possible

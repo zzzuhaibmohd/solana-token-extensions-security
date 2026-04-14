@@ -94,6 +94,27 @@ Fix direction:
 - store or credit the observed amount rather than the nominal input when the token behavior can differ
 - cap later payouts by the real spendable balance and fail with an explicit insolvency error if needed
 
+### Token Account Mint and Authority Binding
+
+Look for:
+- token-account inputs that are not constrained to the expected mint
+- code that confuses token-account `owner`, transfer authority, and the token program itself
+- CPI / transfer flows that accept arbitrary authority accounts without verifying they match the source owner or approved delegate
+- protocols that silently assume ATA-only behavior even when generic token accounts are valid
+- freeze / close authority that is present but not explicitly policy-checked
+
+Impact:
+- unrelated token routing
+- failed or misdirected transfers
+- stale delegate or authority abuse
+- operational lockups from unexamined freeze or close policy
+
+Fix direction:
+- enforce mint consistency on every token account input
+- validate authority binding against the source account owner or approved delegate
+- require explicit protocol policy for freeze / close authority
+- decide whether the protocol supports ATAs only or any valid token account, and enforce that choice consistently
+
 ### Permanent-Delegate Vault Custody Break
 
 Look for:
@@ -135,23 +156,6 @@ Look for:
 - manually constructed CPI instructions that hardcode `remaining_accounts_info` to `None`
 - wrapper functions that never forward `remaining_accounts` into downstream CPI calls
 - token-hook-aware flows that support some mints but drop the extra account payload required by hook-enabled paths
-
-Impact:
-- CPI failure when downstream programs require extra accounts
-- inability to support hook-enabled or extra-account-driven token flows
-- exit, collect, reward, or settlement paths becoming unusable for compatible mints
-
-Fix direction:
-- forward `remaining_accounts` whenever the downstream program may need extra account metas
-- treat hook-aware CPIs as data-driven, not fixed-arity, wrappers
-- test the wrapper with at least one hook-enabled mint and one no-hook mint
-
-### Remaining-Accounts Forwarding Gap
-
-Look for:
-- manually constructed CPI instructions that hardcode `remaining_accounts_info` to `None`
-- wrapper functions that never forward `remaining_accounts` into downstream CPI calls
-- Token-2022 or token-hook aware protocols that support some mints but not the extra account payload required by hook-enabled paths
 
 Impact:
 - CPI failure when downstream programs require extra accounts

@@ -90,3 +90,4 @@ Built from:
 - [Token-2022 Security Best Practices, Part 2](https://blog.offside.io/p/token-2022-security-best-practices-part-2)
 - [Neodyme: Token-2022 TL;DR](https://neodyme.io/en/blog/token-2022/#tldr)
 - [0xFrankCastle Token-2022 audit thread](https://x.com/0xcastle_chain/status/2031497044775366770)
+- [RareSkills Solana Tutorial (60 Days)](https://rareskills.io/solana-tutorial)

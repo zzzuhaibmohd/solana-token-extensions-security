@@ -184,6 +184,7 @@ Use these when drafting findings:
 - The protocol assumes withheld fees are real-time without harvest, which is false because `withheld_amount` is only synchronized when harvested to the mint.
 - The protocol records nominal transfer amounts for a fee-bearing mint instead of net received amounts, which slowly drains vault or reserve accounting.
 - The protocol records nominal transfer amounts as spendable balance, which can make later withdrawals fail when the receiver-side delta is smaller than expected.
+- The protocol fails to bind token account mint, owner, and authority separately, which can route unrelated tokens or accept the wrong signer relationship.
 - The protocol accepts a mint with `PermanentDelegate` without trust-listing or monitoring the delegate model, so a third party can drain protocol custody.
 - The protocol accepts hook-enabled transfers without forwarding extra accounts or mint-aware transfer details, so the transfer hook can fail and DoS the flow.
 - The protocol computes mint account space before appending all required extensions, so metadata-enabled mint creation fails at runtime because the account is undersized.

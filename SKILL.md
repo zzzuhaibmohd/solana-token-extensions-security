@@ -14,6 +14,7 @@ Read [finding-templates.md](references/finding-templates.md) when writing findin
 Use the issue bank in [token-2022-patterns.md](references/token-2022-patterns.md) to map real audit findings to recurring Token-2022 failure modes:
 - fee accounting drift on transfer-fee mints
 - nominal credit vs spendable balance mismatches
+- token-account mint / authority binding mistakes
 - permanent-delegate vault custody breaks
 - transfer-hook integration gaps and missing extra accounts
 - remaining-accounts forwarding gaps in manual CPI wrappers
@@ -122,6 +123,9 @@ Ask these immediately during review:
 - Does mint initialization assume extensions can be added later?
 - Does any CPI path reuse one token-program account across multiple CPI legs in the same instruction?
 - Does any manual CPI wrapper hardcode `remaining_accounts_info` to `None` or otherwise drop extra account metas?
+- Does the code separately validate token-account mint, owner, and authority/delegate relationships?
+- Does it assume ATA-only behavior when generic token accounts are possible?
+- Does it accept freeze or close authority without an explicit protocol policy?
 
 If the answer to any is yes, inspect Token-2022 extension interactions before trusting the design.
 
@@ -276,173 +280,9 @@ At minimum, inspect:
 
 ## Common Vulnerability Themes
 
-### Theme: Exact-Amount Assumption
+See [references/token-2022-patterns.md](references/token-2022-patterns.md) for the detailed reusable themes, break conditions, and fix directions.
 
-Red flag:
-- protocol increments internal credit by requested transfer amount
-
-Breaks under:
-- transfer fees
-- hooks that fail or alter flow
-- memo-required destinations when transfer silently never lands
-- `calculate_fee` and `calculate_inverse_fee` being mixed interchangeably
-
-### Theme: Immediate-Usability Assumption
-
-Red flag:
-- protocol creates a token account and immediately deposits, transfers, or escrows without checking state
-
-Breaks under:
-- default frozen accounts
-- extension-incompatible token accounts
-
-### Theme: Stable-Mint Assumption
-
-Red flag:
-- protocol allowlists by current mint state only
-
-Breaks under:
-- close-and-reinitialize
-
-### Theme: Mint Dependency Assumption
-
-Red flag:
-- protocol assumes mint extensions can be initialized in any order or combined arbitrarily
-
-Breaks under:
-- hidden extension dependency constraints
-- missing `confidential transfer` / `transfer fee` / `confidential transfer fee` ordering
-
-### Theme: Mint-Recreate Assumption
-
-Red flag:
-- protocol stores mint-derived state as if the mint address can never be closed and recreated
-
-Breaks under:
-- `MintCloseAuthority`
-- zero-supply close and reinitialization at the same address
-
-### Theme: Permanent Delegate Assumption
-
-Red flag:
-- protocol assumes the mint cannot move or burn user funds outside normal account-owner approvals
-
-Breaks under:
-- `PermanentDelegate`
-- automatic authorization of the permanent delegate in transfer paths
-- vaults that trust live balances without accounting for delegate power
-
-### Theme: Vault-Can’t-Be-Drained Assumption
-
-Red flag:
-- protocol treats live vault balance as impossible to mutate externally
-
-Breaks under:
-- permanent delegate
-- mint authority power
-- seizure/compliance controls
-
-### Theme: Plain-Transfer Assumption
-
-Red flag:
-- protocol assumes transfer is only a token movement with no side effects
-
-Breaks under:
-- transfer hook
-- memo transfer
-- CPI guard
-- calling deprecated `transfer` on Token-2022 flows that require mint-aware transfer paths
-- transfer-hook or transfer-fee accounts that return `MintRequiredForTransfer` unless the mint is supplied
-
-### Theme: Mint-Aware Transfer Assumption
-
-Red flag:
-- protocol uses `transfer` when the token path needs the mint, decimals, or expected fee
-
-Breaks under:
-- `TransferHook`
-- `TransferFee`
-- `transfer_checked`
-- `transfer_checked_with_fee`
-
-### Theme: Interest Formula Assumption
-
-Red flag:
-- protocol assumes the mint’s interest formula matches its own accounting model
-
-Breaks under:
-- timestamp-based UI conversion only
-- slot-based or custom interest expectations
-- network timestamp drift or halted production causing different UI conversions
-
-### Theme: Fee Accounting Assumption
-
-Red flag:
-- protocol assumes transfer fees are immediately reflected as the nominal transfer amount or that fee helpers are exact inverses
-
-Breaks under:
-- `TransferFee`
-- `calculate_fee` vs `calculate_inverse_fee` rounding differences
-- withheld-fee values that are not synchronized until harvested
-- transfer-fee config changes that do not take effect immediately
-
-### Theme: Metadata Identity Assumption
-
-Red flag:
-- protocol trusts metadata, group, or member data without verifying the mint-pointer relationship
-
-Breaks under:
-- spoofed metadata / group / member accounts pointing at a legitimate mint
-- embedded metadata living in the mint itself versus a separate account
-
-### Theme: WSOL Identity Assumption
-
-Red flag:
-- protocol assumes there is only one wrapped SOL mint or special-cases WSOL without checking the program family
-
-Breaks under:
-- Token-2022 WSOL mint address differs from SPL Token WSOL
-- ambiguous SOL/WSOL handling in DeFi integrations
-
-### Theme: Program-ID Assumption
-
-Red flag:
-- protocol assumes SDK helpers or CPIs will automatically target the right token program
-
-Breaks under:
-- SPL Token helper defaults pointing to the SPL Token program
-- explicit Token-2022 behavior requiring `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`
-
-### Theme: Interface-Selection Assumption
-
-Red flag:
-- protocol uses `token_interface` without having decided to support Token-2022
-
-Breaks under:
-- SPL-only contracts that accidentally become ambiguous
-- helper paths that should have used `anchor_spl::token::Token`
-
-### Theme: SPL-Compat Assumption
-
-Red flag:
-- protocol hardcodes classic SPL token-account space, rent, or closure rules
-
-Breaks under:
-- extension-sized token accounts
-- transfer-fee withheld balances
-- confidential-transfer pending and available balances
-- CPI-guard close restrictions
-- mint extensions needing upfront allocation and initialization order
-
-### Theme: Reallocation Assumption
-
-Red flag:
-- protocol assumes token-account size is fixed forever after creation
-
-Breaks under:
-- account extensions added later
-- extra-rent payer mismatches
-- keeper-funded account creation
+Use this file as the compact audit workflow, and use the reference file for the full pattern catalog.
 
 ## Reporting Template
 

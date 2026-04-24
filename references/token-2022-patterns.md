@@ -219,6 +219,23 @@ Fix direction:
 - only reuse one token-program account when the protocol truly enforces a single token-program family
 - validate mixed-program paths during integration tests with at least one SPL Token and one Token-2022 asset pair
 
+### Program-Aware ATA Derivation
+
+Look for:
+- expected associated token accounts derived with legacy SPL-only helpers in Token-2022-aware flows
+- ATA validation that compares against a canonical address without threading the token program id into the derivation
+- account constraints that assume associated token addresses are identical across SPL Token and Token-2022
+
+Impact:
+- valid Token-2022 ATA rejected as invalid
+- finalize, claim, deposit, or settlement flows blocked by the wrong canonical account assumption
+- compatibility DoS when Token-2022 assets are supported but not derived correctly
+
+Fix direction:
+- derive the expected ATA with a token-program-aware helper or explicit token program id
+- pin the supported token-program family if only one is intended
+- test the path separately with SPL Token and Token-2022 mints
+
 ## Transfer Fees
 
 Look for:
@@ -673,3 +690,4 @@ Usually breaks under:
 - extension-sized token accounts
 - extension-specific close restrictions
 - Token-2022 transfer requirements
+

@@ -191,3 +191,4 @@ Use these when drafting findings:
 - The protocol reuses a single token-program account across multiple CPI legs, so mixed SPL Token / Token-2022 flows fail or route through the wrong program.
 - The protocol validates confidential proof commitments with a length-limited comparison, so extra commitments can be ignored unless they are explicitly required to be zero.
 - The protocol drops `remaining_accounts` from a manual CPI wrapper, so hook-enabled downstream instructions can fail even though the wrapper appears to support the token flow.
+- The protocol derives expected associated token accounts with legacy SPL-only logic, so valid Token-2022 ATAs are rejected when the token program differs.

@@ -115,6 +115,7 @@ Ask these immediately during review:
 - Does it assume a newly created token account is usable immediately?
 - Does it ever close and recreate mints, or trust mints created externally?
 - Does it assume token accounts are normal ATAs with standard behavior?
+- Does it derive expected ATAs with the correct token program id?
 - Does it call into token transfers without handling hooks, memos, fees, freezes, or CPI restrictions?
 - Does it use a single vault for tokens whose mint authorities can seize, burn, or drain balances?
 - Does it hardcode token account rent, account size, or closure conditions?
@@ -157,6 +158,8 @@ Search for these first:
 - `MintRequiredForTransfer`
 - `anchor_spl::token::transfer`
 - `transfer_checked_with_fee`
+- `get_associated_token_address`
+- `get_associated_token_address_with_program_id`
 - `165`
 - `reallocate`
 - `createReallocateInstruction`
@@ -169,6 +172,7 @@ Search for these first:
 - `anchor_spl::token_interface`
 - `anchor_spl::token::Token`
 - `zip`
+- `associated_token::token_program`
 
 Also search for logic that:
 - compares expected and actual token balances
@@ -392,3 +396,12 @@ When writing a new pattern, prefer reusable language over protocol-specific lang
 - write the general bug class
 - note the affected protocol type only as an example
 - keep the heuristic useful across multiple Solana codebases whenever possible
+
+### Theme: Program-Aware ATA Derivation
+
+Red flag:
+- protocol validates an expected associated token account using legacy SPL-only derivation while Token-2022 assets are in scope
+
+Breaks under:
+- Token-2022 associated-token-account derivation that depends on token program id
+- finalize / claim / deposit flows that compare the wrong canonical ATA

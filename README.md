@@ -1,93 +1,86 @@
-# Solana Token-2022 Security Skill
+<pre>
+███████╗██╗      ██████╗ ████████╗    ███████╗███████╗██████╗  ██████╗
+██╔════╝██║     ██╔═══██╗╚══██╔══╝    ╚══███╔╝██╔════╝██╔══██╗██╔═══██╗
+███████╗██║     ██║   ██║   ██║          ███╔╝ █████╗  ██████╔╝██║   ██║
+╚════██║██║     ██║   ██║   ██║         ███╔╝  ██╔══╝  ██╔══██╗██║   ██║
+███████║███████╗╚██████╔╝   ██║        ███████╗███████╗██║  ██║╚██████╔╝
+╚══════╝╚══════╝ ╚═════╝    ╚═╝        ╚══════╝╚══════╝╚═╝  ╚═╝ ╚═════╝
 
-A compact audit pack for reviewing Solana programs that touch Token-2022 mints, token accounts, vaults, escrows, staking flows, AMMs, and bridges.
+███████╗███████╗ ██████╗██╗   ██╗██████╗ ██╗████████╗██╗   ██╗
+██╔════╝██╔════╝██╔════╝██║   ██║██╔══██╗██║╚══██╔══╝╚██╗ ██╔╝
+███████╗█████╗  ██║     ██║   ██║██████╔╝██║   ██║    ╚████╔╝
+╚════██║██╔══╝  ██║     ██║   ██║██╔══██╗██║   ██║     ╚██╔╝
+███████║███████╗╚██████╗╚██████╔╝██║  ██║██║   ██║      ██║
+╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝
 
-Token-2022 changes the rules around:
-- transfer fees
-- transfer hooks
-- permanent delegates
-- mint close authority
-- memo-required transfers
-- default frozen accounts
-- mint/account sizing
-- metadata and group identity
-- confidential balances
-- wrapped SOL identity
+             SOLANA TOKEN EXTENSIONS SECURITY AUDITOR · v2
+                    https://slotzerosecurity.com/
+</pre>
 
-## What’s Inside
+# Solana Token Extensions Security Auditor v2
 
-- `SKILL.md` - main review workflow and heuristics
-- `references/token-2022-patterns.md` - extension patterns and real issue classes
-- `references/finding-templates.md` - report template, confidence matrix, Alice/Bob PoC framing
+A professional, evidence-first multi-agent auditor for Solana programs and client code that integrates SPL Token-2022. The skill combines eight fixed specialists, centralized semantic deduplication, exhaustive pattern coverage, and fresh isolated verification for every candidate.
 
-## Quick Start
+> ⚠️ **AI-Generated Security Review:** This report was produced by an AI-assisted multi-agent system and may contain mistakes, omissions, false positives, and false negatives. It does not prove the absence of vulnerabilities and must not be treated as a substitute for an independent manual security audit. A qualified security professional should manually review the code before production deployment or before the system handles valuable assets.
 
-```bash
-git clone https://github.com/zzzuhaibmohd/solana-token-extensions-security.git
-cd solana-token-extensions-security
-```
+## Install and invoke
 
-Open these files first:
-- [`SKILL.md`](./SKILL.md)
-- [`references/token-2022-patterns.md`](./references/token-2022-patterns.md)
-- [`references/finding-templates.md`](./references/finding-templates.md)
-
-## How to Use
-
-### Claude Code
-
-Use this repo as a review playbook and ask Claude to audit the target project with a Token-2022 lens.
-
-Example:
+Place this directory at `~/.codex/skills/solana-token-extensions-security`, then invoke:
 
 ```text
-Audit this Solana codebase using SKILL.md.
-Look for Token-2022 extension bugs, incorrect accounting, unsafe CPI assumptions, and mint/reinitialize risks.
-Return findings with severity, confidence score, evidence, Alice/Bob scenario, exploit path, and fix.
+$solana-token-extensions-security audit this repository
+$solana-token-extensions-security review programs/vault and clients/token.ts
 ```
 
-### Cursor
+The invocation name remains stable for compatibility. Every completed in-scope audit writes:
 
-Keep `SKILL.md` open while reviewing the target codebase in Cursor, then search for the high-signal terms and compare behavior against `references/token-2022-patterns.md`.
+```text
+slot_zero_token_extensions_report_YYYYMMDD_HHMMSS.md
+```
 
-### Codex
+## Scope
 
-Load `SKILL.md` into context, use the issue bank while triaging, and format findings with `references/finding-templates.md`.
+Primary scope includes Anchor/native Solana Rust and Token-2022-relevant TypeScript or JavaScript clients, SDKs, account resolvers, ATA builders, and instruction constructors. Manifests, IDLs, program IDs, dependency versions, and configuration are peripheral evidence. Tests support reasoning but are not treated as audited production code.
 
-## Reporting Style
+## Eight-role architecture
 
-Every finding should include:
-- Severity
-- Confidence
-- Confidence Score `0.0` to `1.0`
-- Evidence
-- Alice/Bob Scenario
-- Exploit Path
-- Fix
+| Role | Security surface |
+|---|---|
+| 1 | Token-program policy, account identity, mint/owner/ATA binding |
+| 2 | Transfer fees, rounding, raw-balance accounting, amount conversions |
+| 3 | Transfer hooks, extra-account metadata, dynamic accounts, CPI trust |
+| 4 | Delegates, custody, pause/freeze, authorities, permissioned burn |
+| 5 | Initialization, sizing, rent, reallocation, closure, mint provenance |
+| 6 | Metadata, groups, pointers, WSOL, program IDs, interfaces, version drift |
+| 7 | Confidential transfer and mint/burn, proofs, cryptographic key binding |
+| 8 | Cross-flow asymmetry, bridges, alternate movement, complete coverage sweep |
 
-## Parallel Review
+All roles finish before candidates are deduplicated. Each distinct candidate then goes to a fresh isolated verifier that must prove attack execution, reachability, an unprivileged trigger, and material impact. If fresh verification is unavailable, the audit fails closed and emits no partial report.
 
-For bigger audits, split the work into parallel passes:
-- transfer flows, fees, hooks, and memo constraints
-- mint lifecycle, sizing, close-and-reinitialize, and authority model
-- metadata, group identity, WSOL identity, program IDs, and interface selection
-- vault, escrow, staking, and live balance reconciliation
-- manual CPI wrappers and `remaining_accounts` forwarding
+## Pattern categories
 
-## Contribute
+The stable catalog is split into eight maintained categories: identity/program policy; fees and amounts; hooks and CPI; authorities and controls; lifecycle and sizing; metadata and interfaces; confidential state and proofs; and cross-flow parity. Every pattern has a unique `T22-*` ID, and the coverage role must classify every ID.
 
-Open to contributors. If you find a new pattern:
-1. Add it to `references/token-2022-patterns.md`
-2. Add a report-ready line to `references/finding-templates.md`
-3. Add a short heuristic to `SKILL.md` if it’s broadly useful
+Dedicated v2 coverage includes Pausable behavior, Permissioned Burn, Scaled UI Amount, Confidential Mint/Burn proof freshness, ElGamal/auditor/registry binding, and deployed-program/SDK/client feature-version drift.
 
-Suggestions and improvements are welcome, especially if they generalize well across different Solana protocols.
+## Report contents
 
-## References
+Each report includes the Slot Zero Security banner and disclaimer, engagement summary, audited scope and reviewed files, findings summary, confirmed findings, manual-review leads, limitations, and the manual-audit footer. Extension detection, full pattern coverage, candidate accounting, and agent/verifier provenance remain mandatory internal controls but are intentionally omitted from the client-facing report.
 
-Built from:
-- [Token-2022 Security Best Practices, Part 1](https://blog.offside.io/p/token-2022-security-best-practices-part-1)
-- [Token-2022 Security Best Practices, Part 2](https://blog.offside.io/p/token-2022-security-best-practices-part-2)
-- [Neodyme: Token-2022 TL;DR](https://neodyme.io/en/blog/token-2022/#tldr)
-- [0xFrankCastle Token-2022 audit thread](https://x.com/0xcastle_chain/status/2031497044775366770)
-- [RareSkills Solana Tutorial (60 Days)](https://rareskills.io/solana-tutorial)
+Findings use Critical/High/Medium/Low severity and 1–100 confidence. Findings below 80 confidence contain no prescriptive patch diff and require manual confirmation. Leads are deliberately unscored and contain no fix.
+
+## Limitations
+
+The skill cannot prove the absence of vulnerabilities, validate unknown production configuration without evidence, or replace deployment review, testing, monitoring, and human judgment. It will not continue with inline self-verification when a fresh isolated verifier is unavailable.
+
+## Official references
+
+- [Token extensions overview](https://solana.com/docs/tokens/extensions)
+- [Token-2022 extension modules](https://github.com/solana-program/token-2022/blob/main/program/src/extension/mod.rs)
+- [Scaled UI Amount interface](https://github.com/solana-program/token-2022/blob/main/interface/src/extension/scaled_ui_amount/mod.rs)
+- [Permissioned Burn tracking issue](https://github.com/solana-program/token-2022/issues/772)
+- [Confidential mint/burn proof freshness](https://github.com/solana-program/token-2022/issues/126)
+
+For an independent Solana security engagement, visit [Slot Zero Security](https://slotzerosecurity.com/).
+
+> AI analysis cannot guarantee security. Always combine this report with an independent manual audit, testing, monitoring, and an appropriate bug bounty program. Learn more at [Slot Zero Security](https://slotzerosecurity.com/).

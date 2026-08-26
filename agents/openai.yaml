@@ -1,0 +1,6 @@
+interface:
+  display_name: "Slot Zero Security — Token Extensions Auditor v2"
+  short_description: "Verified multi-agent Token-2022 security audits"
+  default_prompt: "Use $solana-token-extensions-security to run the Slot Zero Security Solana Token Extensions Security Auditor v2 on this project."
+policy:
+  allow_implicit_invocation: true

@@ -236,6 +236,144 @@ Fix direction:
 - pin the supported token-program family if only one is intended
 - test the path separately with SPL Token and Token-2022 mints
 
+### Instruction-Specific Extra-Account Metadata Mismatch
+
+Look for:
+- freeze, thaw, transfer, or other paired actions that reuse one extra-account-metas PDA, seed namespace, or resolver
+- SDK builders that derive the validation account for one instruction but pass it to another instruction
+- downstream helpers that silently ignore a metadata account when its address does not match the action-specific derivation
+
+Impact:
+- required dynamic accounts are never resolved
+- one side of a paired policy flow works while the reverse side consistently fails
+- permissionless freeze, thaw, transfer, or settlement becomes integration-dependent or unusable
+
+Fix direction:
+- derive and initialize a distinct metadata account for every instruction namespace required by the downstream interface
+- keep on-chain derivation, SDK derivation, and downstream resolver expectations identical
+- test every paired action with a gate or hook that actually requires at least one dynamic account
+
+False-positive control:
+- prove that the downstream resolver expects a different address and that the supplied account is ignored or rejected; a naming difference alone is insufficient
+
+### Dynamic CPI Account Role Binding
+
+Look for:
+- positional parsing of `remaining_accounts` where only length and executable program IDs are checked
+- authority, state, event-authority, mint, or metadata slots forwarded from the caller after the wrapper already derived the canonical accounts
+- wrappers that discard a validated mint/authority relationship and rely entirely on downstream account constraints
+
+Impact:
+- caller-selected state or authority can reach a privileged CPI
+- a dependency upgrade that weakens downstream constraints can turn integration hardening into an exploit
+- malformed account sets create confusing failures or cross-instance routing
+
+Fix direction:
+- derive every deterministic role locally and compare it with the corresponding dynamic account before CPI
+- bind non-deterministic roles to the validated mint, token account, owner, delegate, or configured policy program
+- document which checks intentionally remain the callee's responsibility
+
+False-positive control:
+- if the pinned callee revalidates every role and no signer or mutable authority can be redirected, report the gap as defense-in-depth rather than a present exploit
+
+### Hook or Gate Program Trust Binding
+
+Look for:
+- CPIs that accept any executable hook, gate, ACL, or policy program
+- setup instructions that forward a PDA signer to a program not matched against mint/config state
+- clients that choose the policy program independently from the mint's authoritative extension or registry configuration
+
+Impact:
+- policy setup can be routed to the wrong program
+- signer privilege can be exposed to an unintended CPI target
+- a fake program can emulate the expected discriminator and alter or relay the privileged operation
+
+Fix direction:
+- bind the CPI program ID to the mint extension, trusted registry, or imported declared program ID
+- validate executable status in addition to, not instead of, address identity
+- minimize signer and writable privileges passed to setup or hook CPIs
+
+False-positive control:
+- an explicitly trusted admin choosing an arbitrary integration target may be an operational footgun only; require an untrusted selection path or a violated documented invariant for an exploitable finding
+
+### Wrapper-Only Policy Enforcement
+
+Look for:
+- pause, allowlist, rate-limit, or compliance checks implemented only in a convenience wrapper
+- a downstream hook, ACL, thaw/freeze, mint, burn, or transfer program that remains directly callable
+- multiple entrypoints reaching the same state transition but only one consulting policy state
+
+Impact:
+- direct invocation bypasses emergency pause or eligibility controls
+- policy behavior differs by entrypoint even though the resulting token-state mutation is equivalent
+
+Fix direction:
+- enforce the invariant at the lowest common, unavoidable state-transition boundary
+- require an authenticated wrapper caller if the callee is not intended to be public
+- enumerate and test every public path to the protected transition
+
+False-positive control:
+- prove that a direct caller can satisfy the callee's own constraints and achieve the protected mutation; public program visibility alone does not establish bypass
+
+### Extension-Integration Schema Drift
+
+Look for:
+- locally copied discriminators, seed literals, account layouts, enum tags, or instruction selectors from a Token-2022-adjacent dependency
+- deserialization or PDA derivation whose constants have no compile-time tie to the pinned upstream crate
+- upgradeable dependencies whose state format can change while the wrapper continues compiling
+
+Impact:
+- dependency upgrades silently brick extension-aware flows
+- wrappers deserialize the wrong state variant or derive obsolete accounts
+- policy integrations fail only after an upstream deployment changes
+
+Fix direction:
+- import public constants and types from the pinned dependency wherever possible
+- otherwise add fixture, integration, or build-time assertions against the upstream representation
+- gate dependency/deployment upgrades on compatibility tests for every supported extension flow
+
+False-positive control:
+- classify as compatibility or operational risk unless a reachable schema mismatch causes a security-relevant fail-open, fund lock, or durable denial of service
+
+### Alternate Token Movement Bypasses Transfer-Hook Policy
+
+Look for:
+- bridge, migration, redemption, seizure, or rebalance paths using burn/remint, revoke/issue, close/recreate, or wrap/unwrap instead of a transfer
+- permanent-delegate burns assumed to execute transfer-hook policy
+- local reimplementations of hook rules that omit sentinels, timing cases, identity rules, pause state, or amount limits
+
+Impact:
+- transfer pause, compliance, lock, flowback, or amount-limit policy can be bypassed while equivalent value moves
+- cross-chain or alternate-form assets escape restrictions applied to ordinary transfers
+
+Fix direction:
+- define whether policy governs the `TransferChecked` instruction only or the economic movement of value
+- route every equivalent movement through a common policy validator before the irreversible burn, revoke, or close
+- avoid hand-copying hook semantics; expose a dedicated policy validation interface when possible
+
+False-positive control:
+- do not report when the policy is explicitly transfer-only and alternate movement is intentionally permitted; prove a forbidden outcome under the documented asset policy
+
+### Eligibility State and Token-State Desynchronization
+
+Look for:
+- onboarding that both creates eligibility state and thaws default-frozen token accounts, but offboarding only deletes the eligibility record
+- registry mutation paths that do not freeze or otherwise disable already-usable accounts
+- thaw loops that can succeed partially in an external workflow while durable eligibility state is absent or stale
+
+Impact:
+- a removed wallet can continue transferring on-chain
+- bridge/registry eligibility and Token-2022 transfer eligibility disagree
+- operators believe de-whitelisting is complete while thawed accounts retain capability
+
+Fix direction:
+- model eligibility metadata and token-account state as coupled state with symmetric onboarding and offboarding transitions
+- freeze every affected account before or atomically with eligibility deletion, or enforce eligibility in an unavoidable transfer policy
+- provide reconciliation and monitoring for accounts created after the last lifecycle transition
+
+False-positive control:
+- verify that thawed accounts can still complete a meaningful token operation after eligibility removal; an intentionally metadata-only registry is not a token-freeze control
+
 ## Transfer Fees
 
 Look for:
@@ -690,4 +828,3 @@ Usually breaks under:
 - extension-sized token accounts
 - extension-specific close restrictions
 - Token-2022 transfer requirements
-

@@ -21,6 +21,13 @@ Use the issue bank in [token-2022-patterns.md](references/token-2022-patterns.md
 - mint-extension space is computed before all required mint extensions are added
 - mixed token-program CPI wiring reuses one token program across multiple CPI legs
 - confidential proof validation truncates after the expected prefix and ignores unused commitments
+- instruction-specific extra-account metadata is derived from the wrong action namespace
+- caller-selected `remaining_accounts` are forwarded without binding each role to the validated mint or authority path
+- hook or gate CPIs trust an executable program without binding it to configured policy
+- wrapper-only pause or policy checks are bypassed through a directly callable downstream program
+- copied extension-integration schemas or discriminators drift from the pinned upstream dependency
+- burn/remint, revoke/issue, or other alternate movement bypasses transfer-hook policy
+- eligibility-record changes and frozen/thawed token-account state become desynchronized
 
 Use the confidence matrix in [finding-templates.md](references/finding-templates.md) to record how sure you are about each finding separately from severity.
 
@@ -173,6 +180,13 @@ Search for these first:
 - `anchor_spl::token::Token`
 - `zip`
 - `associated_token::token_program`
+- `remaining_accounts`
+- `extra_account_metas`
+- `freeze_extra_account_metas`
+- `thaw_extra_account_metas`
+- `invoke_signed`
+- `is_paused`
+- `DISCRIMINATOR`
 
 Also search for logic that:
 - compares expected and actual token balances
@@ -194,6 +208,13 @@ Also search for logic that:
 - reuses a single token-program account across multiple CPI legs in the same instruction
 - validates confidential proof commitments with a prefix-only comparison
 - drops `remaining_accounts` from a CPI wrapper that may need extra account metas
+- reuses one action's extra-account-metas PDA or resolver for a different action
+- validates only the number or program slots of dynamic CPI accounts, not their semantic roles
+- invokes an executable hook or gate without matching it to mint/config state
+- applies pause, allowlist, or compliance checks only in a wrapper around a public callee
+- copies an upstream discriminator, seed, or account layout without a dependency-pinned assertion
+- moves equivalent value through burn/remint, revoke/issue, wrap/unwrap, or bridge paths that never execute the transfer hook
+- deletes eligibility state without restoring the token account's intended frozen state, or thaws without durable eligibility state
 
 ## Extension Review Checklist
 

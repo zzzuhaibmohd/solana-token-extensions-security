@@ -192,3 +192,10 @@ Use these when drafting findings:
 - The protocol validates confidential proof commitments with a length-limited comparison, so extra commitments can be ignored unless they are explicitly required to be zero.
 - The protocol drops `remaining_accounts` from a manual CPI wrapper, so hook-enabled downstream instructions can fail even though the wrapper appears to support the token flow.
 - The protocol derives expected associated token accounts with legacy SPL-only logic, so valid Token-2022 ATAs are rejected when the token program differs.
+- The integration reuses another instruction's extra-account-metas account, so the downstream resolver never loads the dynamic accounts required by this action.
+- The wrapper forwards caller-selected CPI roles without binding them to its validated mint and authority path, leaving security dependent on downstream revalidation.
+- The setup flow accepts any executable hook or gate program instead of binding the CPI target to authoritative mint or policy configuration.
+- The protocol enforces pause or eligibility only in a wrapper, so callers can invoke the public downstream state transition directly.
+- The integration copies an upstream discriminator or seed without a compatibility assertion, so a dependency upgrade can silently break extension-aware flows.
+- The protocol moves equivalent value through burn/remint or revoke/issue, so transfer-hook restrictions do not run on the alternate path.
+- The offboarding flow deletes eligibility state without re-freezing previously thawed token accounts, leaving on-chain transfer capability active.
